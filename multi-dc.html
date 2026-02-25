@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Multi-DC Fulfillment Network — Splunk ITSI</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d1117;--card:#161b22;--hover:#1c2333;--border:#30363d;
+  --text:#e6edf3;--muted:#8b949e;--dim:#484f58;
+  --green:#2ea043;--green-bg:rgba(46,160,67,.15);
+  --blue:#58a6ff;--blue-bg:rgba(88,166,255,.15);
+  --yellow:#d29922;--yellow-bg:rgba(210,153,34,.15);
+  --orange:#db6d28;--orange-bg:rgba(219,109,40,.15);
+  --red:#f85149;--red-bg:rgba(248,81,73,.15);
+  --accent:#7c3aed;--accent-lt:#a78bfa;
+  --east:#58a6ff;--west:#39d353;--shared:#bc8cff;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.6;min-height:100vh}
+
+/* === HEADER === */
+.hdr{text-align:center;padding:36px 24px 24px;background:linear-gradient(180deg,#161b22,var(--bg));border-bottom:1px solid var(--border)}
+.hdr h1{font-size:1.7rem;font-weight:700;letter-spacing:-.02em;margin-bottom:4px}
+.hdr h1 .g{color:var(--green)}
+.hdr .sub{color:var(--muted);font-size:.88rem;max-width:740px;margin:0 auto 16px}
+.hdr .intro{color:var(--muted);font-size:.8rem;max-width:840px;margin:0 auto;line-height:1.7;text-align:left;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px 18px}
+.hdr .intro strong{color:var(--text)}
+.wrap{max-width:1320px;margin:0 auto;padding:24px 18px}
+
+/* === SCENARIO CARDS === */
+.scenario{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:24px}
+@media(max-width:700px){.scenario{grid-template-columns:1fr}}
+.dc-ov{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 16px}
+.dc-ov .t{font-size:.82rem;font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:7px}
+.dc-ov .t .d{width:9px;height:9px;border-radius:50%}
+.dc-ov .b{font-size:.72rem;color:var(--muted);line-height:1.8}
+.dc-ov .b strong{color:var(--text)}
+
+/* === SIMULATION PANEL === */
+.sim{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:18px;margin-bottom:24px}
+.sim h3{font-size:.88rem;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:7px}
+.sim-ctl{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.btn{padding:7px 16px;border:none;border-radius:6px;font-size:.76rem;font-weight:600;cursor:pointer;transition:all .2s}
+.btn:hover{filter:brightness(1.15)}
+.btn.go{background:var(--red);color:#fff}
+.btn.go.done{background:var(--green)}
+.btn.s{background:rgba(255,255,255,.08);color:var(--text)}
+.btn.s:disabled{opacity:.3;cursor:default}
+.btn.r{background:rgba(255,255,255,.06);color:var(--muted)}
+.tl{display:flex;gap:0;margin-bottom:6px}
+.tls{flex:1;padding:9px 12px;background:rgba(255,255,255,.03);border:1px solid var(--border);font-size:.7rem;cursor:pointer;transition:all .3s}
+.tls:first-child{border-radius:6px 0 0 6px}
+.tls:last-child{border-radius:0 6px 6px 0}
+.tls .tt{font-weight:700;color:var(--text);margin-bottom:1px}
+.tls .tn{color:var(--muted);font-weight:600}
+.tls .td{color:var(--dim);margin-top:3px;line-height:1.5}
+.tls.on{background:var(--red-bg);border-color:var(--red)}
+.tls.on .tt{color:var(--red)}
+.tls.past{background:rgba(248,81,73,.05);border-color:rgba(248,81,73,.25)}
+.sim-st{font-size:.72rem;color:var(--dim);margin-top:4px;min-height:16px}
+
+/* === TIER LABEL === */
+.tlab{display:flex;align-items:center;gap:10px;font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin:20px 0 12px}
+.tlab .ln{flex:1;height:1px;background:var(--border)}
+
+/* === TOP CARD === */
+.top-w{text-align:center;margin-bottom:6px}
+.top-c{display:inline-block;background:var(--card);border:2px solid var(--border);border-radius:14px;padding:20px 40px;cursor:pointer;transition:all .4s}
+.top-c:hover{border-color:var(--accent)}
+.top-c .lb{font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px}
+.top-c .sc{font-size:2.6rem;font-weight:800;transition:color .4s}
+.top-c .tg{display:inline-block;margin-top:3px;padding:2px 10px;border-radius:999px;font-size:.66rem;font-weight:600;text-transform:uppercase;transition:all .4s}
+.top-c .gl{font-size:.62rem;color:var(--dim);margin-top:7px;font-style:italic}
+
+/* === CONNECTORS === */
+.conns{display:flex;justify-content:center;padding:3px 0}
+.cn{width:2px;height:28px;margin:0 54px;transition:background .4s}
+@media(max-width:900px){.cn{margin:0 24px}}
+
+/* === GROUP CARDS === */
+.grps{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:6px}
+@media(max-width:900px){.grps{grid-template-columns:1fr}}
+.gc{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;cursor:pointer;transition:all .3s}
+.gc:hover{transform:translateY(-2px);box-shadow:0 4px 18px rgba(0,0,0,.3)}
+.gc .gh{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.gc .gn{font-size:.8rem;font-weight:600}
+.gc .gb{font-size:.6rem;padding:2px 7px;border-radius:4px;font-weight:600;text-transform:uppercase}
+.gc .gs{font-size:1.5rem;font-weight:800;transition:color .4s}
+.gc .gv{font-size:.63rem;text-transform:uppercase;font-weight:600;transition:color .4s}
+
+/* === SUB-SERVICE CARDS === */
+.srow{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:6px}
+@media(max-width:900px){.srow{grid-template-columns:1fr}}
+.scol{display:flex;flex-direction:column;gap:8px}
+.sc{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:11px 13px;cursor:pointer;transition:all .25s;position:relative}
+.sc:hover{border-color:var(--accent-lt);transform:translateY(-1px)}
+.sc.flash{animation:fl .6s ease}
+@keyframes fl{0%{box-shadow:0 0 0 rgba(248,81,73,.6)}50%{box-shadow:0 0 16px 3px rgba(248,81,73,.3)}100%{box-shadow:0 0 0 rgba(248,81,73,0)}}
+.sc .sh{display:flex;justify-content:space-between;align-items:center;margin-bottom:3px}
+.sc .sn{font-size:.76rem;font-weight:600;flex:1;padding-right:6px}
+.sc .ss{font-size:1.15rem;font-weight:800;min-width:36px;text-align:center;padding:2px 7px;border-radius:5px;transition:all .4s}
+.sc .sv{font-size:.6rem;text-transform:uppercase;font-weight:600;margin-bottom:4px;transition:color .4s}
+.sc .dep{font-size:.6rem;color:var(--dim);display:flex;align-items:center;gap:3px;margin-bottom:4px}
+.sc .dep .dd{width:5px;height:5px;border-radius:50%;background:var(--shared)}
+.sc .kl{display:none;margin-top:7px;padding-top:7px;border-top:1px solid var(--border)}
+.sc.exp .kl{display:block}
+.sc .eh{font-size:.6rem;color:var(--dim);text-align:center;margin-top:3px}
+.sc.exp .eh{display:none}
+
+/* === KPI ROW === */
+.kr{display:flex;align-items:center;gap:6px;padding:4px 0;font-size:.7rem;border-bottom:1px solid rgba(255,255,255,.04)}
+.kr:last-child{border-bottom:none}
+.kr .kd{width:6px;height:6px;border-radius:50%;flex-shrink:0;transition:background .4s}
+.kr .kn{flex:1;color:var(--muted)}
+.kr .kv{font-weight:600;min-width:64px;text-align:right;transition:color .4s}
+.kr .ks{font-size:.58rem;color:var(--dim);min-width:52px;text-align:right}
+.kr .ki{font-size:.58rem;color:var(--dim);min-width:20px;text-align:right}
+
+/* === ANALYZER TABLE === */
+.az{background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:24px 0}
+.az-t{font-size:.82rem;font-weight:700;padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:7px;background:rgba(255,255,255,.02)}
+.az-t .badge{font-size:.58rem;padding:2px 7px;border-radius:4px;background:var(--accent);color:#fff;font-weight:600}
+.az table{width:100%;border-collapse:collapse;font-size:.73rem}
+.az th{text-align:left;padding:7px 12px;color:var(--muted);font-weight:600;font-size:.66rem;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border);background:rgba(0,0,0,.2)}
+.az td{padding:6px 12px;border-bottom:1px solid rgba(255,255,255,.04);transition:all .3s}
+.az tr:hover td{background:rgba(255,255,255,.02)}
+.az .tp{color:var(--dim);font-family:monospace}
+.az .hc{font-weight:700;text-align:center;min-width:46px;transition:color .4s}
+.az .vc{font-weight:600;text-transform:uppercase;font-size:.63rem;transition:color .4s}
+.az .wk{color:var(--dim);font-size:.66rem}
+.az .st{font-size:.56rem;padding:1px 5px;border-radius:3px;background:rgba(188,140,255,.15);color:var(--shared);margin-left:5px}
+
+/* === FORMULA === */
+.fm{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:18px 22px;margin:24px 0}
+.fm h3{font-size:.88rem;margin-bottom:12px}
+.fb{background:rgba(0,0,0,.4);border:1px solid var(--border);border-radius:8px;padding:12px 16px;font-family:'SF Mono',Monaco,Consolas,monospace;font-size:.8rem;color:var(--accent-lt);margin-bottom:12px;overflow-x:auto}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:5px;font-size:.7rem;font-weight:600;border:1px solid rgba(255,255,255,.08)}
+.chip .cd{width:6px;height:6px;border-radius:50%}
+.rules .rl{display:flex;align-items:flex-start;gap:7px;font-size:.76rem;color:var(--muted);margin-bottom:7px;line-height:1.5}
+.rules .bl{width:5px;height:5px;border-radius:50%;background:var(--accent);flex-shrink:0;margin-top:7px}
+
+/* === ANNOTATIONS === */
+.anns{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px;margin:22px 0}
+.ann{background:var(--card);border-left:3px solid var(--accent);border-radius:0 8px 8px 0;padding:11px 13px;font-size:.73rem;color:var(--muted);line-height:1.6}
+.ann strong{color:var(--text)}
+
+/* === ENTITY TABLE === */
+.ent{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:18px 22px;margin:22px 0}
+.ent h3{font-size:.86rem;margin-bottom:12px}
+.ent table{width:100%;border-collapse:collapse;font-size:.7rem}
+.ent th{text-align:left;padding:5px 9px;color:var(--muted);font-weight:600;border-bottom:1px solid var(--border);font-size:.63rem;text-transform:uppercase}
+.ent td{padding:5px 9px;border-bottom:1px solid rgba(255,255,255,.04);color:var(--muted)}
+.ent code{background:rgba(255,255,255,.06);padding:1px 4px;border-radius:3px;font-size:.66rem;color:var(--text)}
+.ft{font-size:.58rem;padding:1px 5px;border-radius:3px;font-weight:600}
+.ft.e{background:rgba(88,166,255,.15);color:var(--east)}
+.ft.w{background:rgba(57,211,83,.15);color:var(--west)}
+.ft.s{background:rgba(188,140,255,.15);color:var(--shared)}
+
+.ftr{text-align:center;padding:24px 18px;border-top:1px solid var(--border);color:var(--dim);font-size:.7rem;margin-top:18px}
+
+/* === MODAL === */
+.modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:999;align-items:center;justify-content:center}
+.modal.vis{display:flex}
+.modal-c{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:22px;max-width:540px;width:92%;position:relative;box-shadow:0 18px 50px rgba(0,0,0,.5)}
+.modal-x{position:absolute;top:9px;right:12px;background:none;border:none;color:var(--muted);font-size:1.1rem;cursor:pointer}
+</style>
+</head>
+<body>
+
+<header class="hdr">
+  <h1>Multi-DC Fulfillment Network &mdash; <span class="g">Splunk ITSI</span></h1>
+  <p class="sub">How a shared service outage cascades across two Distribution Centers and surfaces on a single executive dashboard</p>
+  <div class="intro">
+    This infographic demonstrates <strong>multi-DC service modeling</strong> in Splunk ITSI. Two distribution centers (DC-East and DC-West) share centralized AWS services for order routing, inventory sync, and carrier API integration. When a shared service degrades, ITSI's <strong>dependency propagation</strong> reflects the impact across both facilities &mdash; with <strong>differential severity</strong> depending on each DC's carrier mix. Use the <strong>timeline simulation</strong> below to watch a single Carrier API Gateway failure cascade through the entire service tree.
+  </div>
+</header>
+
+<div class="wrap">
+
+<!-- Scenario Overview -->
+<div class="scenario">
+  <div class="dc-ov">
+    <div class="t"><span class="d" style="background:var(--east)"></span>DC-East (Richmond, VA)</div>
+    <div class="b"><strong>Volume:</strong> 60,000 pkgs/day &bull; <strong>Focus:</strong> General merchandise, oversized<br><strong>WMS:</strong> WMS-East (on-prem Oracle) &bull; <strong>Carriers:</strong> UPS, USPS</div>
+  </div>
+  <div class="dc-ov">
+    <div class="t"><span class="d" style="background:var(--west)"></span>DC-West (Reno, NV)</div>
+    <div class="b"><strong>Volume:</strong> 45,000 pkgs/day &bull; <strong>Focus:</strong> Small parcel, high-velocity SKUs<br><strong>WMS:</strong> WMS-West (on-prem Oracle) &bull; <strong>Carriers:</strong> FedEx, USPS</div>
+  </div>
+</div>
+
+<!-- Simulation Panel -->
+<div class="sim">
+  <h3><span style="color:var(--red)">&#9888;</span> Incident Simulation: Carrier API Gateway Degrades</h3>
+  <div class="sim-ctl">
+    <button class="btn s" id="bPrev" onclick="prev()" disabled>&#8592; Prev</button>
+    <button class="btn go" id="bGo" onclick="toggle()">&#9654; Start Simulation</button>
+    <button class="btn s" id="bNext" onclick="next()">Next &#8594;</button>
+    <button class="btn r" onclick="reset()">Reset</button>
+  </div>
+  <div class="tl" id="tl"></div>
+  <div class="sim-st" id="simSt">Click &ldquo;Start Simulation&rdquo; to step through a Carrier API Gateway failure cascading across both DCs</div>
+</div>
+
+<!-- Tier 3 -->
+<div class="tlab"><span class="ln"></span>Tier 3 &mdash; National Aggregate<span class="ln"></span></div>
+<div class="top-w">
+  <div class="top-c" id="topC" onclick="modal('top')">
+    <div class="lb">National Fulfillment Health</div>
+    <div class="sc" id="topSc">94</div>
+    <div class="tg" id="topTg">Normal</div>
+    <div class="gl">&#9670; Glass Table Dashboard &mdash; Executive View</div>
+  </div>
+</div>
+
+<div class="conns"><div class="cn" id="cE"></div><div class="cn" id="cS"></div><div class="cn" id="cW"></div></div>
+
+<!-- Tier 2 -->
+<div class="tlab"><span class="ln"></span>Tier 2 &mdash; Operations Groups<span class="ln"></span></div>
+<div class="grps" id="grps"></div>
+
+<div style="height:6px"></div>
+
+<!-- Tier 1 -->
+<div class="tlab"><span class="ln"></span>Tier 1 &mdash; Services &amp; KPIs<span class="ln"></span></div>
+<div class="srow" id="srow"></div>
+
+<!-- Service Analyzer -->
+<div class="az">
+  <div class="az-t"><span>&#9632;</span> Service Analyzer <span class="badge">ITSI</span></div>
+  <table><thead><tr><th>Service</th><th style="text-align:center">Health</th><th>Severity</th><th>Worst KPI</th></tr></thead><tbody id="azB"></tbody></table>
+</div>
+
+<!-- Formula -->
+<div class="fm">
+  <h3>&#128270; How It's Calculated</h3>
+  <div class="fb">Service Health Score = &Sigma;(KPI_severity_value &times; KPI_importance) / &Sigma;(KPI_importance)</div>
+  <div class="chips">
+    <span class="chip"><span class="cd" style="background:var(--green)"></span>Normal=100</span>
+    <span class="chip"><span class="cd" style="background:var(--blue)"></span>Low=70</span>
+    <span class="chip"><span class="cd" style="background:var(--yellow)"></span>Medium=50</span>
+    <span class="chip"><span class="cd" style="background:var(--orange)"></span>High=30</span>
+    <span class="chip"><span class="cd" style="background:var(--red)"></span>Critical=0</span>
+  </div>
+  <div class="rules">
+    <div class="rl"><span class="bl"></span><span><strong>Shared Service Dependencies:</strong> Order Routing, Inventory Sync, and Carrier API Gateway are standalone services depended on by <em>both</em> DCs. A shared service failure cascades into both branches of the service tree simultaneously.</span></div>
+    <div class="rl"><span class="bl"></span><span><strong>Differential Impact:</strong> The same shared service failure can hit one DC harder than another. DC-West relies on FedEx &mdash; when the Carrier API Gateway's FedEx endpoint fails, DC-West shipping stalls while DC-East (UPS primary) sees only partial degradation.</span></div>
+    <div class="rl"><span class="bl"></span><span><strong>Episode Correlation:</strong> When ITSI sees Shipping-East and Shipping-West degrade simultaneously alongside a Critical Carrier API Gateway, it groups all alerts into a <strong>single Notable Event Episode</strong> &mdash; preventing alert storms.</span></div>
+    <div class="rl"><span class="bl"></span><span><strong>Automated Remediation:</strong> ITSI aggregate policies can open ServiceNow incidents and trigger Ansible playbooks &mdash; e.g., failover FedEx traffic to UPS at DC-West when the Carrier Gateway's FedEx endpoint fails.</span></div>
+  </div>
+</div>
+
+<!-- Annotations -->
+<div class="anns">
+  <div class="ann"><strong>Shared services are the key modeling insight.</strong> Order Routing, Inventory Sync, and Carrier API Gateway are standalone ITSI services. Both DC operations list them as dependencies &mdash; ITSI automatically computes cascading impact across both branches.</div>
+  <div class="ann"><strong>Entity scoping with facility dimension.</strong> DC-specific services filter KPI searches by <code>facility=dc-east</code> or <code>facility=dc-west</code>. Shared services use <code>facility=shared</code>. Same KPI definitions, different entity scope.</div>
+  <div class="ann"><strong>Episode correlation prevents alert storms.</strong> When ITSI sees correlated degradation across both DCs, it groups Shipping-East, Shipping-West, and Carrier API Gateway alerts into one episode, pointing operators to the shared root cause.</div>
+  <div class="ann"><strong>Automated remediation triggers.</strong> ITSI aggregate policies can fire ServiceNow incidents and Ansible playbooks &mdash; e.g., auto-failover FedEx traffic to UPS at DC-West when the Carrier Gateway degrades.</div>
+</div>
+
+<!-- Entity Aliasing -->
+<div class="ent">
+  <h3>Entity Aliasing Across DCs &amp; Tools</h3>
+  <table>
+    <thead><tr><th>Zenoss Name</th><th>Datadog Tag</th><th>AppDynamics Node</th><th>ITSI Entity</th><th>Facility</th></tr></thead>
+    <tbody>
+      <tr><td><code>conveyor-east-01</code></td><td><code>host:conv-e01, facility:dc-east</code></td><td><code>CONV_E01</code></td><td><code>conv-east-01</code></td><td><span class="ft e">dc-east</span></td></tr>
+      <tr><td><code>conveyor-west-01</code></td><td><code>host:conv-w01, facility:dc-west</code></td><td><code>CONV_W01</code></td><td><code>conv-west-01</code></td><td><span class="ft w">dc-west</span></td></tr>
+      <tr><td><code>carrier-gw-1</code></td><td><code>host:carrier-gw-1, facility:shared</code></td><td><code>CARRIER_GW_1</code></td><td><code>carrier-gw-1</code></td><td><span class="ft s">shared</span></td></tr>
+      <tr><td><code>ship-sorter-east</code></td><td><code>host:sort-e01, facility:dc-east</code></td><td><code>SORT_E01</code></td><td><code>sort-east-01</code></td><td><span class="ft e">dc-east</span></td></tr>
+      <tr><td><code>order-router-prod</code></td><td><code>host:or-prod-1, facility:shared</code></td><td><code>ORDER_RTR_1</code></td><td><code>order-router-1</code></td><td><span class="ft s">shared</span></td></tr>
+    </tbody>
+  </table>
+</div>
+</div>
+
+<footer class="ftr">Built for educational purposes &mdash; illustrating ITSI multi-DC service modeling for IT Operations teams managing e-commerce fulfillment network technology stacks.</footer>
+
+<!-- Modal -->
+<div class="modal" id="mo" onclick="if(event.target===this)this.classList.remove('vis')">
+  <div class="modal-c" onclick="event.stopPropagation()">
+    <button class="modal-x" onclick="document.getElementById('mo').classList.remove('vis')">&times;</button>
+    <div id="moB"></div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   DATA MODEL
+   ============================================================ */
+const SV={Normal:100,Low:70,Medium:50,High:30,Critical:0};
+const SC={Normal:'var(--green)',Low:'var(--blue)',Medium:'var(--yellow)',High:'var(--orange)',Critical:'var(--red)'};
+const SB={Normal:'var(--green-bg)',Low:'var(--blue-bg)',Medium:'var(--yellow-bg)',High:'var(--orange-bg)',Critical:'var(--red-bg)'};
+const SK={Normal:'normal',Low:'low',Medium:'medium',High:'high',Critical:'critical'};
+
+/* Sub-services ------------------------------------------------ */
+const subs={
+  /* DC-EAST */
+  'recv-e':{n:'Inbound Receiving',f:'east',g:'dc-e',dep:null,kpis:[
+    {id:'re1',n:'Dock Door Utilization',src:'Zenoss',v:'73%',s:'Normal',w:7},
+    {id:'re2',n:'Receiving App Response',src:'AppDynamics',v:'180ms',s:'Normal',w:8},
+    {id:'re3',n:'Unload Rate (pkgs/hr)',src:'Datadog',v:'1,240',s:'Normal',w:6},
+    {id:'re4',n:'ASN Processing Delay',src:'Splunk (direct)',v:'12 min',s:'Low',w:4}]},
+  'conv-e':{n:'Conveyors & Sortation',f:'east',g:'dc-e',dep:null,kpis:[
+    {id:'ce1',n:'Conveyor Throughput',src:'Zenoss',v:'2,400 u/hr',s:'Normal',w:9},
+    {id:'ce2',n:'Conveyor Fault Rate',src:'Datadog',v:'4 faults/hr',s:'Low',w:8},
+    {id:'ce3',n:'Sortation Accuracy',src:'Splunk (direct)',v:'99.7%',s:'Normal',w:7},
+    {id:'ce4',n:'Motor Temp Variance',src:'Datadog',v:'+1.2\u00b0F',s:'Normal',w:6}]},
+  'ship-e':{n:'Outbound Shipping',f:'east',g:'dc-e',dep:'Carrier API GW',kpis:[
+    {id:'se1',n:'Label Generation Rate',src:'AppDynamics',v:'42 labels/min',s:'Normal',w:9},
+    {id:'se2',n:'Pack Station Throughput',src:'Datadog',v:'890 pkgs/hr',s:'Normal',w:8},
+    {id:'se3',n:'Outbound Scan Accuracy',src:'Splunk (direct)',v:'99.4%',s:'Normal',w:7}]},
+  /* DC-WEST */
+  'recv-w':{n:'Inbound Receiving',f:'west',g:'dc-w',dep:null,kpis:[
+    {id:'rw1',n:'Dock Door Utilization',src:'Zenoss',v:'68%',s:'Normal',w:9},
+    {id:'rw2',n:'Receiving App Response',src:'AppDynamics',v:'195ms',s:'Normal',w:8},
+    {id:'rw3',n:'Unload Rate (pkgs/hr)',src:'Datadog',v:'980',s:'Normal',w:7},
+    {id:'rw4',n:'ASN Processing Delay',src:'Splunk (direct)',v:'18 min',s:'Low',w:3}]},
+  'conv-w':{n:'Conveyors & Sortation',f:'west',g:'dc-w',dep:null,kpis:[
+    {id:'cw1',n:'Conveyor Throughput',src:'Zenoss',v:'1,900 u/hr',s:'Normal',w:8},
+    {id:'cw2',n:'Conveyor Fault Rate',src:'Datadog',v:'5 faults/hr',s:'Low',w:8},
+    {id:'cw3',n:'Sortation Accuracy',src:'Splunk (direct)',v:'99.3%',s:'Normal',w:8}]},
+  'ship-w':{n:'Outbound Shipping',f:'west',g:'dc-w',dep:'Carrier API GW',kpis:[
+    {id:'sw1',n:'Label Generation Rate',src:'AppDynamics',v:'38 labels/min',s:'Normal',w:9},
+    {id:'sw2',n:'Pack Station Throughput',src:'Datadog',v:'720 pkgs/hr',s:'Normal',w:8},
+    {id:'sw3',n:'Outbound Scan Accuracy',src:'Splunk (direct)',v:'99.6%',s:'Normal',w:7}]},
+  /* SHARED */
+  'ord-rt':{n:'Order Routing Engine',f:'shared',g:'shared',dep:null,kpis:[
+    {id:'or1',n:'Routing Decision Latency',src:'AppDynamics',v:'145ms',s:'Normal',w:9},
+    {id:'or2',n:'Routing Error Rate',src:'Datadog',v:'0.2%',s:'Normal',w:10},
+    {id:'or3',n:'SQS Queue Depth',src:'Datadog',v:'842',s:'Low',w:7},
+    {id:'or4',n:'DC Allocation Balance',src:'Splunk (direct)',v:'57/43',s:'Low',w:6}]},
+  'inv-sy':{n:'Inventory Sync',f:'shared',g:'shared',dep:null,kpis:[
+    {id:'is1',n:'Sync Lag (seconds)',src:'Datadog',v:'0.8s',s:'Normal',w:10},
+    {id:'is2',n:'Inventory Mismatch Count',src:'Splunk (direct)',v:'12',s:'Normal',w:9},
+    {id:'is3',n:'Cache Hit Rate',src:'Datadog',v:'94.8%',s:'Low',w:8}]},
+  'car-gw':{n:'Carrier API Gateway',f:'shared',g:'shared',dep:null,kpis:[
+    {id:'ca1',n:'Label Gen Latency',src:'AppDynamics',v:'320ms',s:'Normal',w:8},
+    {id:'ca2',n:'Carrier API Error Rate',src:'Datadog',v:'0.3%',s:'Normal',w:9},
+    {id:'ca3',n:'Labels Generated/min',src:'Splunk (direct)',v:'147',s:'Low',w:5},
+    {id:'ca4',n:'Per-Carrier Health',src:'Datadog',v:'98.5%',s:'Normal',w:9}]},
+};
+
+const grps={
+  'dc-e':{n:'DC-East Operations',c:'var(--east)',badge:'EAST',ch:['recv-e','conv-e','ship-e'],cw:[7,7,10]},
+  'shared':{n:'Shared Services',c:'var(--shared)',badge:'SHARED',ch:['ord-rt','inv-sy','car-gw'],cw:[8,8,8]},
+  'dc-w':{n:'DC-West Operations',c:'var(--west)',badge:'WEST',ch:['recv-w','conv-w','ship-w'],cw:[7,7,10]},
+};
+const gOrder=['dc-e','shared','dc-w'];
+const topW=[10,8,10];
+
+/* ============================================================
+   SIMULATION
+   ============================================================ */
+const steps=[
+  {time:'14:00',title:'Carrier API Gateway Fails',
+   desc:'AWS ALB returns 503s on FedEx endpoint. Error rate spikes to 62%, per-carrier health collapses.',
+   hl:'car-gw',
+   ov:{'ca1':{v:'4.2s',s:'High'},'ca2':{v:'62%',s:'Critical'},'ca3':{v:'42/min',s:'High'},'ca4':{v:'34%',s:'Critical'}}},
+  {time:'14:02',title:'DC-West Shipping Stalls',
+   desc:'FedEx is DC-West\'s primary carrier. Label generation drops 84%, pack stations back up.',
+   hl:'ship-w',
+   ov:{'sw1':{v:'6 labels/min',s:'Critical'},'sw2':{v:'180 pkgs/hr',s:'Critical'},'sw3':{v:'96.5%',s:'Medium'}}},
+  {time:'14:03',title:'DC-East Partially Impacted',
+   desc:'UPS (primary) still works, but USPS labels affected. Shipping degrades but doesn\'t stall.',
+   hl:'ship-e',
+   ov:{'se1':{v:'22 labels/min',s:'High'},'se2':{v:'550 pkgs/hr',s:'Medium'}}},
+];
+
+let step=-1,ov={};
+
+/* ============================================================
+   CALC ENGINE
+   ============================================================ */
+function eff(k){const o=ov[k.id];return o?{...k,v:o.v,s:o.s}:k}
+function s2sev(s){return s>=80?'Normal':s>=60?'Low':s>=40?'Medium':s>=20?'High':'Critical'}
+
+function calcSub(sk){
+  const svc=subs[sk];let num=0,den=0,worst=null,wv=100;
+  for(const k of svc.kpis){const e=eff(k),sv=SV[e.s];num+=sv*e.w;den+=e.w;if(sv<wv){wv=sv;worst=e}}
+  const score=Math.round(num/den);
+  return{score,sev:s2sev(score),worst,sk};
+}
+function calcGrp(gk){
+  const g=grps[gk];let num=0,den=0,wc=null,ws=101;
+  g.ch.forEach((c,i)=>{const r=calcSub(c),w=g.cw[i];num+=r.score*w;den+=w;if(r.score<ws){ws=r.score;wc=r}});
+  return{score:Math.round(num/den),sev:s2sev(Math.round(num/den)),wc,gk};
+}
+function calcTop(){
+  let num=0,den=0;
+  gOrder.forEach((gk,i)=>{const r=calcGrp(gk);num+=r.score*topW[i];den+=topW[i]});
+  const score=Math.round(num/den);
+  return{score,sev:s2sev(score)};
+}
+
+/* ============================================================
+   RENDER
+   ============================================================ */
+function render(){
+  const gR={},sR={};
+  for(const gk of gOrder)gR[gk]=calcGrp(gk);
+  for(const sk of Object.keys(subs))sR[sk]=calcSub(sk);
+  const tR=calcTop();
+
+  /* Top card */
+  const ts=document.getElementById('topSc'),tt=document.getElementById('topTg'),tc=document.getElementById('topC');
+  ts.textContent=tR.score;ts.style.color=SC[tR.sev];
+  tt.textContent=tR.sev;tt.className='tg sev-'+SK[tR.sev]+' bg-'+SK[tR.sev];
+  tc.style.borderColor=SC[tR.sev];
+
+  /* Connectors */
+  ['E','S','W'].forEach((c,i)=>{document.getElementById('c'+c).style.background=SC[gR[gOrder[i]].sev]});
+
+  /* Groups */
+  const gEl=document.getElementById('grps');gEl.innerHTML='';
+  for(const gk of gOrder){
+    const g=grps[gk],r=gR[gk],d=document.createElement('div');
+    d.className='gc';d.style.borderColor=g.c;d.onclick=()=>modal('grp',gk);
+    d.innerHTML=`<div class="gh"><div class="gn">${g.n}</div><div class="gb" style="background:${g.c}20;color:${g.c}">${g.badge}</div></div>
+      <div class="gs" style="color:${SC[r.sev]}">${r.score}<span style="font-size:.65rem;color:var(--muted)"> /100</span></div>
+      <div class="gv" style="color:${SC[r.sev]}">${r.sev}</div>`;
+    gEl.appendChild(d);
+  }
+
+  /* Sub-services */
+  const sEl=document.getElementById('srow');sEl.innerHTML='';
+  for(const gk of gOrder){
+    const col=document.createElement('div');col.className='scol';
+    for(const sk of grps[gk].ch){
+      const sv=subs[sk],r=sR[sk],cd=document.createElement('div');
+      cd.className='sc';cd.id='c-'+sk;
+      if(steps.some((st,si)=>si<=step&&si===step&&st.hl===sk))cd.classList.add('flash');
+      cd.onclick=function(e){e.stopPropagation();this.classList.toggle('exp')};
+
+      const fc=sv.f==='east'?'var(--east)':sv.f==='west'?'var(--west)':'var(--shared)';
+      const fl=sv.f==='shared'?'SHARED':sv.f.toUpperCase();
+      let dep='';if(sv.dep)dep=`<div class="dep"><span class="dd"></span>Depends on: ${sv.dep}</div>`;
+      let kh='';
+      for(const k of sv.kpis){
+        const e=eff(k),changed=!!ov[k.id];
+        kh+=`<div class="kr"><span class="kd" style="background:${SC[e.s]};box-shadow:0 0 3px ${SC[e.s]}"></span>
+          <span class="kn">${e.n}</span>
+          <span class="kv" style="color:${SC[e.s]}">${changed?'<b>':''}\u200b${e.v}${changed?'</b>':''}</span>
+          <span class="ks">${e.src}</span><span class="ki">w${e.w}</span></div>`;
+      }
+      cd.innerHTML=`<div class="sh"><div class="sn">${sv.n}<span style="font-size:.58rem;color:${fc};margin-left:5px">${fl}</span></div>
+        <div class="ss" style="background:${SB[r.sev]};color:${SC[r.sev]}">${r.score}</div></div>
+        <div class="sv" style="color:${SC[r.sev]}">${r.sev}${r.worst&&r.worst.s!=='Normal'?' \u2014 Worst: '+r.worst.n:''}</div>
+        ${dep}<div class="eh">Click to see KPIs</div><div class="kl">${kh}</div>`;
+      col.appendChild(cd);
+    }
+    sEl.appendChild(col);
+  }
+
+  /* Analyzer */
+  renderAz(tR,gR,sR);
+  /* Timeline */
+  renderTl();
+}
+
+function renderAz(tR,gR,sR){
+  const b=document.getElementById('azB');
+  function row(p,nm,sc,sv,wk,ex){
+    const w=wk&&wk.s!=='Normal'?`<span style="color:${SC[wk.s]}">${wk.n}: ${wk.v}</span>`:'<span style="color:var(--dim)">\u2014</span>';
+    return `<tr><td><span class="tp">${p}</span>${nm}${ex||''}</td><td class="hc" style="color:${SC[sv]}">${sc}</td><td class="vc" style="color:${SC[sv]}">${sv}</td><td class="wk">${w}</td></tr>`;
+  }
+  let h=row('','National Fulfillment',tR.score,tR.sev,null);
+  const layout=[
+    {gk:'dc-e',p:'\u251c\u2500 ',kids:[{sk:'recv-e',p:'\u2502  \u251c\u2500 '},{sk:'conv-e',p:'\u2502  \u251c\u2500 '},{sk:'ship-e',p:'\u2502  \u2514\u2500 '}]},
+    {gk:'dc-w',p:'\u251c\u2500 ',kids:[{sk:'recv-w',p:'\u2502  \u251c\u2500 '},{sk:'conv-w',p:'\u2502  \u251c\u2500 '},{sk:'ship-w',p:'\u2502  \u2514\u2500 '}]},
+    {gk:'shared',p:'\u2514\u2500 ',kids:[{sk:'ord-rt',p:'   \u251c\u2500 '},{sk:'inv-sy',p:'   \u251c\u2500 '},{sk:'car-gw',p:'   \u2514\u2500 '}]},
+  ];
+  for(const l of layout){
+    const gr=gR[l.gk];
+    h+=row(l.p,grps[l.gk].n,gr.score,gr.sev,gr.wc?gr.wc.worst:null);
+    for(const k of l.kids){
+      const sr=sR[k.sk],s=subs[k.sk],tag=s.f==='shared'?'<span class="st">SHARED</span>':'';
+      const lbl=s.n+(s.f!=='shared'?' \u2014 '+s.f.toUpperCase():'');
+      h+=row(k.p,lbl,sr.score,sr.sev,sr.worst,tag);
+    }
+  }
+  b.innerHTML=h;
+}
+
+function renderTl(){
+  const tl=document.getElementById('tl');tl.innerHTML='';
+  steps.forEach((s,i)=>{
+    const d=document.createElement('div');
+    d.className='tls'+(i===step?' on':i<step?' past':'');
+    d.onclick=()=>goTo(i);
+    d.innerHTML=`<div class="tt">${s.time}</div><div class="tn">${s.title}</div><div class="td">${s.desc}</div>`;
+    tl.appendChild(d);
+  });
+  document.getElementById('bPrev').disabled=step<0;
+  document.getElementById('bNext').disabled=step>=steps.length-1;
+  const gb=document.getElementById('bGo');
+  if(step>=steps.length-1){gb.textContent='\u21ba Reset';gb.classList.add('done')}
+  else if(step>=0){gb.textContent='\u25b6 Next Step';gb.classList.remove('done')}
+  else{gb.innerHTML='&#9654; Start Simulation';gb.classList.remove('done')}
+  const st=document.getElementById('simSt');
+  if(step<0){st.textContent='Click \u201cStart Simulation\u201d to step through a Carrier API Gateway failure cascading across both DCs';st.style.color=''}
+  else if(step<steps.length-1){st.textContent='Step '+(step+1)+'/'+steps.length+': '+steps[step].title+' \u2014 Click Next to continue cascade';st.style.color='var(--orange)'}
+  else{st.textContent='Full cascade complete \u2014 Carrier API GW failure has propagated to both DCs and the National dashboard';st.style.color='var(--red)'}
+}
+
+/* ============================================================
+   SIM CONTROL
+   ============================================================ */
+function goTo(s){step=s;ov={};for(let i=0;i<=s;i++)Object.assign(ov,steps[i].ov);render()}
+function toggle(){if(step>=steps.length-1)reset();else next()}
+function next(){if(step<steps.length-1)goTo(step+1)}
+function prev(){if(step>0)goTo(step-1);else if(step===0)reset()}
+function reset(){step=-1;ov={};render()}
+
+/* ============================================================
+   MODAL
+   ============================================================ */
+function modal(type,key){
+  let h='';
+  if(type==='top'){
+    const r=calcTop();
+    h+=`<h3 style="margin-bottom:10px">National Fulfillment &mdash; Score Breakdown</h3>`;
+    h+=`<div style="font-size:1.8rem;font-weight:800;color:${SC[r.sev]};margin-bottom:3px">${r.score}<span style="font-size:.85rem;color:var(--muted)"> /100</span></div>`;
+    h+=`<div style="margin-bottom:12px;font-size:.8rem;color:${SC[r.sev]};font-weight:600">${r.sev}</div>`;
+    h+='<div style="font-size:.73rem;color:var(--muted);margin-bottom:8px">Child groups (weighted):</div>';
+    gOrder.forEach((gk,i)=>{const gr=calcGrp(gk);
+      h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:rgba(0,0,0,.3);border-radius:5px;margin-bottom:4px;border-left:3px solid ${grps[gk].c}">
+        <span style="font-size:.76rem">${grps[gk].n} <span style="font-size:.62rem;color:var(--dim)">(w${topW[i]})</span></span>
+        <span style="font-weight:700;color:${SC[gr.sev]}">${gr.score}</span></div>`;
+    });
+  }else if(type==='grp'){
+    const g=grps[key],r=calcGrp(key);
+    h+=`<h3 style="margin-bottom:10px;color:${g.c}">${g.n}</h3>`;
+    h+=`<div style="font-size:1.8rem;font-weight:800;color:${SC[r.sev]};margin-bottom:3px">${r.score}<span style="font-size:.85rem;color:var(--muted)"> /100</span></div>`;
+    h+=`<div style="margin-bottom:12px;font-size:.8rem;color:${SC[r.sev]};font-weight:600">${r.sev}</div>`;
+    h+='<div style="font-size:.73rem;color:var(--muted);margin-bottom:8px">Child services:</div>';
+    g.ch.forEach((sk,i)=>{const sr=calcSub(sk);
+      h+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:rgba(0,0,0,.3);border-radius:5px;margin-bottom:4px;border-left:3px solid ${SC[sr.sev]}">
+        <span style="font-size:.76rem">${subs[sk].n} <span style="font-size:.62rem;color:var(--dim)">(w${g.cw[i]})</span></span>
+        <span style="font-weight:700;color:${SC[sr.sev]}">${sr.score}</span></div>`;
+    });
+  }
+  document.getElementById('moB').innerHTML=h;
+  document.getElementById('mo').classList.add('vis');
+}
+
+document.addEventListener('DOMContentLoaded',render);
+</script>
+</body>
+</html>
